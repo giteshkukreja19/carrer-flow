@@ -1,0 +1,7 @@
+# Railway provides PORT at runtime; local containers fall back to 8080.
+:{$PORT:8080} {
+    root * /srv
+    encode gzip zstd
+    try_files {path} /index.html
+    file_server
+}

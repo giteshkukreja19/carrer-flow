@@ -1,0 +1,47 @@
+# Local configuration and credentials. Keep checked-in .env.example files.
+.env
+.env.*
+!.env.example
+client_secret*.json
+*credential*.json
+*token*.json
+*.pem
+*.p12
+*.key
+.secrets/
+secrets/
+
+# Dependencies, generated builds, and caches
+**/node_modules/
+**/venv/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.tox/
+**/.nox/
+**/dist/
+**/build/
+**/coverage/
+*.tsbuildinfo
+.coverage
+.coverage.*
+
+# Local databases, logs, and temporary/editor files
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.dump
+*.pgdump
+*.backup
+*.bak
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
