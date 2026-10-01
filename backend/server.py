@@ -5,17 +5,27 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 from lib import db  # noqa: E402
+from routers.auth import router as auth_router  # noqa: E402
 from routers.placement import router as placement_router  # noqa: E402
 from routers.gmail import router as gmail_router  # noqa: E402
 from services.notifications import whatsapp_requested  # noqa: E402
 from services.scheduler import gmail_poll_loop, whatsapp_notification_loop  # noqa: E402
+from services.auth import (  # noqa: E402
+    SESSION_COOKIE_NAME,
+    AuthStoreUnavailable,
+    allowed_origins,
+    cookie_samesite,
+    cookie_secure,
+    find_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +62,9 @@ async def lifespan(app: FastAPI):
     await db.close_db()
 
 
-app = FastAPI(title="Placement Pilot", lifespan=lifespan)
+app = FastAPI(title="Career Flow", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
+api_router.include_router(auth_router)
 api_router.include_router(placement_router)
 api_router.include_router(gmail_router)
 
@@ -66,3 +77,40 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+@app.middleware("http")
+async def require_api_session(request: Request, call_next):
+    path = request.url.path
+    method = request.method.upper()
+    is_api = path == "/api" or path.startswith("/api/")
+    if not is_api or method == "OPTIONS":
+        return await call_next(request)
+
+    origin = request.headers.get("origin")
+    if method not in {"GET", "HEAD", "OPTIONS"} and origin:
+        if origin.rstrip("/") not in allowed_origins():
+            return JSONResponse({"detail": "Request origin is not allowed."}, status_code=403)
+
+    if (path, method) == ("/api/health", "GET") or (path, method) == ("/api/auth/login", "POST"):
+        return await call_next(request)
+
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_id:
+        return JSONResponse({"detail": "Authentication required."}, status_code=401)
+    try:
+        identity = await find_session(session_id)
+    except AuthStoreUnavailable:
+        return JSONResponse({"detail": "Authentication storage is unavailable."}, status_code=503)
+    if identity is None:
+        response = JSONResponse({"detail": "Authentication required."}, status_code=401)
+        response.delete_cookie(
+            SESSION_COOKIE_NAME,
+            path="/api",
+            httponly=True,
+            secure=cookie_secure(request) or cookie_samesite() == "none",
+            samesite=cookie_samesite(),
+        )
+        return response
+    request.state.identity = identity
+    return await call_next(request)

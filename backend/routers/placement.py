@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+from automation.haveloc import scanner_configured
 from fastapi import APIRouter, HTTPException
 
 from lib import db
@@ -40,7 +41,7 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "database_available": db.pool is not None,
         "database_configured": db.database_configured(),
-        "scanner_configured": False,
+        "scanner_configured": scanner_configured(),
         "gmail_oauth_configured": oauth_configured(),
         "gemini_configured": gemini_configured(),
         "whatsapp_configured": whatsapp["configured"],
@@ -144,7 +145,7 @@ async def dashboard() -> DashboardResponse:
         answer_profile=AnswerProfile(**profile_row) if profile_row else DEFAULT_PROFILE,
         database_available=db.pool is not None,
         database_configured=db.database_configured(),
-        scanner_configured=False,
+        scanner_configured=scanner_configured(),
         last_scan_at=last_scan,
     )
 

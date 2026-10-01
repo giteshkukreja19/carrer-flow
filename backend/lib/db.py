@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS gmail_oauth_states (
 CREATE TABLE IF NOT EXISTS gmail_poll_state (
   id INTEGER PRIMARY KEY CHECK (id = 1), last_polled_at TIMESTAMPTZ
 );
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  session_hash TEXT PRIMARY KEY, username TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS auth_login_attempts (
+  client_hash TEXT PRIMARY KEY, failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ, updated_at TIMESTAMPTZ NOT NULL
+);
 INSERT INTO scheduler_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 INSERT INTO answer_profile (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 INSERT INTO gmail_poll_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

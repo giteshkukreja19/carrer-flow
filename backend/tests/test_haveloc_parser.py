@@ -117,6 +117,7 @@ def test_tracker_fixture_coverage_is_explicitly_missing() -> None:
     pytest.fail("A tracker fixture was found, but no tracker parser coverage has been added")
 
 
-def test_haveloc_client_scan_remains_paused() -> None:
+def test_haveloc_client_scan_remains_disabled_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("HAVELOC_SCAN_ENABLED", raising=False)
     result = asyncio.run(HavelocClient().scan())
-    assert result["status"] == "paused"
+    assert result["status"] == "disabled"

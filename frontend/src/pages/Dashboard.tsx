@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, BellRing, BriefcaseBusiness, CalendarDays, ChevronRight, CircleDot,
-  ClipboardList, Clock3, Database, ExternalLink, FileQuestion, LockKeyhole, MailWarning, Radio,
+  ClipboardList, Clock3, Database, ExternalLink, FileQuestion, LockKeyhole, LogOut, MailWarning, Radio,
   Save, Settings2, ShieldCheck, UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiGet, apiPatch, apiPut } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiPut } from "@/lib/api";
 
 interface EligibilityCriterion { label: string; value: string; source: string }
 interface ApplicationQuestion { id: string; prompt: string; kind: string; options: string[]; answer: string | null; needs_review: boolean }
@@ -67,7 +67,7 @@ function EmptyRows({ message, testId }: { message: string; testId: string }) {
   return <div data-testid={testId} className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-slate-800 bg-slate-950/30 px-4 text-center font-mono text-xs text-slate-500">{message}</div>;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: () => apiGet<DashboardData>("/dashboard"), retry: false });
   const view = data ?? emptyDashboard;
@@ -95,20 +95,30 @@ export default function Dashboard() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["dashboard"] }); toast.success("Alert status updated."); },
     onError: () => toast.error("Alert status could not be updated. Refresh and try again."),
   });
+  const scanMutation = useMutation({
+    mutationFn: () => apiPost<{ status: string; message: string }>("/scan"),
+    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["dashboard"] }); toast.message(result.message); },
+    onError: () => toast.error("The read-only Haveloc scan could not be completed."),
+  });
+  const logoutMutation = useMutation({
+    mutationFn: () => apiPost<{ authenticated: boolean }>("/auth/logout"),
+    onSuccess: onLoggedOut,
+    onError: () => toast.error("Logout could not be completed. Retry when the server is available."),
+  });
   const flaggedQuestions = view.jobs.flatMap((job) => job.questions.filter((question) => question.needs_review).map((question) => ({ ...question, company: job.company })));
 
   return <div className="min-h-svh bg-[#090d16] text-slate-200">
     <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl" data-testid="command-header">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3 md:px-7">
-        <a href="#overview" data-testid="brand-home-link" className="group flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg border border-indigo-400/30 bg-indigo-500/10 text-indigo-300"><Radio className="size-4 group-hover:rotate-12" /></div><div><div data-testid="brand-name" className="font-heading text-sm font-semibold tracking-[0.18em] text-white">PLACEMENT PILOT</div><div data-testid="brand-subtitle" className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">HAVELOC / READ-ONLY OPS</div></div></a>
+        <a href="#overview" data-testid="brand-home-link" className="group flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg border border-indigo-400/30 bg-indigo-500/10 text-indigo-300"><Radio className="size-4 group-hover:rotate-12" /></div><div><div data-testid="brand-name" className="font-heading text-sm font-semibold tracking-[0.18em] text-white">CAREER FLOW</div><div data-testid="brand-subtitle" className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">HAVELOC / READ-ONLY OPS</div></div></a>
         <nav className="hidden items-center gap-1 lg:flex" data-testid="desktop-navigation"><a href="#jobs" data-testid="nav-jobs-link" className="rounded-md px-3 py-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">Jobs</a><a href="#applications" data-testid="nav-applications-link" className="rounded-md px-3 py-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">Applications</a><a href="#rounds" data-testid="nav-rounds-link" className="rounded-md px-3 py-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">Rounds</a><a href="#settings" data-testid="nav-settings-link" className="rounded-md px-3 py-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">Settings</a></nav>
-        <div className="flex items-center gap-2"><div data-testid="read-only-badge" className="hidden items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-amber-300 sm:flex"><LockKeyhole className="size-3" /> Read-only</div><Button data-testid="scan-now-button" disabled className="h-9 gap-2 border border-slate-800 bg-slate-900 px-3 text-xs font-semibold text-slate-500"> <LockKeyhole className="size-3.5" /> Haveloc scan paused</Button></div>
+        <div className="flex items-center gap-2"><div data-testid="read-only-badge" className="hidden items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-amber-300 sm:flex"><LockKeyhole className="size-3" /> Read-only</div><Button data-testid="scan-now-button" onClick={() => scanMutation.mutate()} disabled={!view.scanner_configured || scanMutation.isPending} className="h-9 gap-2 border border-slate-800 bg-slate-900 px-3 text-xs font-semibold text-slate-300"><LockKeyhole className="size-3.5" /> {scanMutation.isPending ? "Scanning…" : view.scanner_configured ? "Run read-only scan" : "Haveloc scan disabled"}</Button><Button data-testid="logout-button" variant="outline" onClick={() => logoutMutation.mutate()} disabled={logoutMutation.isPending} className="h-9 gap-2 border-slate-800 text-slate-300"><LogOut className="size-3.5" /> Sign out</Button></div>
       </div>
     </header>
 
     <main className="mx-auto max-w-[1600px] px-4 py-6 md:px-7 md:py-8">
       <section id="overview" className="mb-8 grid gap-5 xl:grid-cols-[1.3fr_0.7fr]" data-testid="overview-section">
-        <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[#111726] p-6 md:p-8"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-indigo-500/10 blur-3xl" /><div className="relative"><div data-testid="overview-eyebrow" className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-sky-400"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Gmail signal surface</div><h1 data-testid="overview-heading" className="max-w-2xl font-heading text-3xl font-semibold tracking-tight text-white md:text-5xl">Placement signals,<br /><span className="text-slate-500">without the guesswork.</span></h1><p data-testid="overview-description" className="mt-4 max-w-xl text-sm leading-6 text-slate-400">Haveloc browser scanning is paused for this phase. Gmail alerts remain disabled until read-only OAuth, encryption, an LLM provider, and exact-sender settings are configured.</p><div className="mt-7 flex flex-wrap items-center gap-3"><Button data-testid="hero-scan-button" disabled variant="outline" className="gap-2 border-slate-800 bg-slate-900/60 text-slate-500"><LockKeyhole className="size-4" /> Haveloc scan paused</Button><div data-testid="last-scan-label" className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Last Gmail poll: {formatDate(view.integration_status.last_polled_at)}</div></div></div></div>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[#111726] p-6 md:p-8"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-indigo-500/10 blur-3xl" /><div className="relative"><div data-testid="overview-eyebrow" className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-sky-400"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Gmail signal surface</div><h1 data-testid="overview-heading" className="max-w-2xl font-heading text-3xl font-semibold tracking-tight text-white md:text-5xl">Placement signals,<br /><span className="text-slate-500">without the guesswork.</span></h1><p data-testid="overview-description" className="mt-4 max-w-xl text-sm leading-6 text-slate-400">Haveloc scanning is opt-in, strictly read-only, and stops for manual intervention at login or anti-bot checks. Gmail alerts remain disabled until read-only OAuth, encryption, an LLM provider, and exact-sender settings are configured.</p><div className="mt-7 flex flex-wrap items-center gap-3"><Button data-testid="hero-scan-button" onClick={() => scanMutation.mutate()} disabled={!view.scanner_configured || scanMutation.isPending} variant="outline" className="gap-2 border-slate-800 bg-slate-900/60 text-slate-300"><LockKeyhole className="size-4" /> {view.scanner_configured ? "Run read-only scan" : "Haveloc scan disabled"}</Button><div data-testid="last-scan-label" className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Last Gmail poll: {formatDate(view.integration_status.last_polled_at)}</div></div></div></div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2" data-testid="overview-stat-grid"><StatCard label="Eligible jobs" value={view.jobs.length} accent="text-emerald-300" icon={BriefcaseBusiness} testId="stat-eligible-jobs" /><StatCard label="Applications" value={view.applications.length} accent="text-sky-300" icon={ClipboardList} testId="stat-applications" /><StatCard label="Active rounds" value={view.rounds.length} accent="text-amber-300" icon={CalendarDays} testId="stat-rounds" /><StatCard label="Action flags" value={view.reminders.length + flaggedQuestions.length} accent="text-rose-300" icon={BellRing} testId="stat-action-flags" /></div>
       </section>
 

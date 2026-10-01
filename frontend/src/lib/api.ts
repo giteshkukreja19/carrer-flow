@@ -25,6 +25,7 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   // Auth rides the httpOnly session cookie automatically — never add auth headers here.
   const res = await fetch(`${BASE}${path}`, {
     method,
+    credentials: "include",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -32,6 +33,9 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   // FastAPI reports request-validation failures as 422 with a {detail: [...]} body.
   if (!res.ok) {
     const errBody = await res.json().catch(() => null);
+    if (res.status === 401 && path !== "/auth/login") {
+      window.dispatchEvent(new Event("career-flow-session-expired"));
+    }
     throw new ApiError(res.status, errBody);
   }
 
